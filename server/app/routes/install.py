@@ -100,14 +100,19 @@ def _render_install_script(
     handoff_b64 = _b64(handoff_py)
 
     # mcp tarball 段(可能为空)
+    # 注意:tar 失败时不 abort,免得影响 SKILL.md / handoff.py / config 装出
     mcp_block = ""
     if mcp_tar_b64:
         mcp_block = f"""
-# === 2.5. 写 mcp-server 模块(打包的 tar.gz) ===
-printf '%s' '{mcp_tar_b64}' | base64 -d > "$INSTALL_DIR/mcp_src.tar.gz"
-mkdir -p "$INSTALL_DIR/lib"
-tar -xzf "$INSTALL_DIR/mcp_src.tar.gz" -C "$INSTALL_DIR/lib/"
-rm -f "$INSTALL_DIR/mcp_src.tar.gz"
+# === 2.5. 写 mcp-server 模块(打包的 tar.gz,失败不致命) ===
+if printf '%s' '{mcp_tar_b64}' | base64 -d > "$INSTALL_DIR/mcp_src.tar.gz" 2>/dev/null \\
+   && mkdir -p "$INSTALL_DIR/lib" \\
+   && tar -xzf "$INSTALL_DIR/mcp_src.tar.gz" -C "$INSTALL_DIR/lib/" 2>/dev/null; then
+  echo "  ✓ mcp-server 模块装好"
+else
+  echo "  ⚠ mcp-server 模块装失败,可重新跑 install 修复"
+fi
+rm -f "$INSTALL_DIR/mcp_src.tar.gz" 2>/dev/null || true
 """
 
     return f"""#!/usr/bin/env bash
@@ -144,6 +149,25 @@ cat > "$INSTALL_DIR/config" <<EOF
 server_url=$SERVER_URL
 installed_at=$(date -Iseconds)
 EOF
+
+# === 3.5. 装 Python 依赖(httpx + cryptography) ===
+echo "→ 检查 Python 依赖 (httpx, cryptography)..."
+if command -v python3 >/dev/null 2>&1; then
+  MISSING=()
+  python3 -c "import httpx" 2>/dev/null || MISSING+=("httpx")
+  python3 -c "import cryptography" 2>/dev/null || MISSING+=("cryptography")
+  if [ ${{#MISSING[@]}} -gt 0 ]; then
+    echo "  缺: ${{MISSING[*]}}  尝试 pip 安装..."
+    if python3 -m pip install --user --quiet "${{MISSING[@]}}" 2>/dev/null \
+       || pip3 install --user --quiet "${{MISSING[@]}}" 2>/dev/null; then
+      echo "  ✓ 已装 ${{MISSING[*]}}"
+    else
+      echo "  ⚠ pip 装失败,请手动: pip3 install ${{MISSING[*]}}"
+    fi
+  else
+    echo "  ✓ 依赖齐全"
+  fi
+fi
 
 # === 4. 写 thin wrapper(让 PATH 一加就能跑 `handoff`) ===
 cat > "$INSTALL_DIR/handoff" <<'WRAP'

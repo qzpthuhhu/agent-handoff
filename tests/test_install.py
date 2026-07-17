@@ -15,7 +15,7 @@ sys.path.insert(0, str(_ROOT / "server"))
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
     import app.config as _cfg  # noqa: E402
     from fastapi.testclient import TestClient  # noqa: E402
 
@@ -24,6 +24,22 @@ def client():
     os.environ["LOCAL_STORAGE_DIR"] = str(tmp / "bundles")
     os.environ["LOCAL_INDEX_DB"] = str(tmp / "index.sqlite")
     _cfg.get_settings.cache_clear()
+
+    # 创建一个临时的 mcp_src 目录,装点假 .py 文件
+    fake_mcp = tmp / "fake_mcp_src"
+    fake_mcp.mkdir()
+    (fake_mcp / "__init__.py").write_text("# fake\n", encoding="utf-8")
+    (fake_mcp / "packager.py").write_text("# fake\n", encoding="utf-8")
+    (fake_mcp / "fetcher.py").write_text("# fake\n", encoding="utf-8")
+
+    # Monkey patch install 路由的路径常量
+    import app.routes.install as _install_mod  # noqa: E402
+
+    monkeypatch.setattr(_install_mod, "_SKILL_MD_PATH", tmp / "fake_skill.md")
+    monkeypatch.setattr(_install_mod, "_HANDOFF_PY_PATH", tmp / "fake_handoff.py")
+    monkeypatch.setattr(_install_mod, "_MCP_SRC_PATH", fake_mcp)
+    (tmp / "fake_skill.md").write_text("# agent-handoff skill\n", encoding="utf-8")
+    (tmp / "fake_handoff.py").write_text("# agent-handoff handoff\n", encoding="utf-8")
 
     from app.main import create_app  # noqa: E402
 
@@ -85,13 +101,14 @@ def test_install_script_actually_runs(client) -> None:
         env=env,
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=60,
     )
     # 安装可能因为 server 健康检查 fail,但 skill 文件应该装好
     install_dir = fake_home / ".handoff"
     assert (install_dir / "SKILL.md").exists()
     assert (install_dir / "handoff.py").exists()
     assert (install_dir / "handoff").exists()
+    assert (install_dir / "lib" / "agent_handoff_mcp" / "__init__.py").exists()
     config = (install_dir / "config").read_text()
     assert "server_url=https://test.example.com:8080" in config
 
