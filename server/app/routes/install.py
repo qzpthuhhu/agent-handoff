@@ -1,7 +1,7 @@
 """`GET /install` 路由:返回一段 bash 一键安装脚本。
 
-脚本内容由本路由动态生成,会把 server URL + SKILL.md + handoff.py 全部嵌入
-到一个自包含的 bash 文件里,用户只要:
+脚本内容由本路由动态生成,会把 server URL + SKILL.md + handoff.py + 整个
+mcp-server Python 模块 全部嵌入到一个自包含的 bash 文件里,用户只要:
     curl -fsSL http://server/install | bash
 就能把 skill 装到 ~/.handoff/。
 
@@ -12,6 +12,8 @@
 from __future__ import annotations
 
 import base64
+import io
+import tarfile
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +24,7 @@ router = APIRouter(tags=["install"])
 # 资产路径(在 Docker 镜像里)
 _SKILL_MD_PATH = Path("/install/SKILL.md")
 _HANDOFF_PY_PATH = Path("/install/scripts/handoff.py")
+_MCP_SRC_PATH = Path("/install/mcp_src")
 
 
 def _infer_server_url(request: Request, explicit: Optional[str]) -> str:
@@ -37,6 +40,20 @@ def _b64(text: str) -> str:
     return base64.b64encode(text.encode("utf-8")).decode("ascii")
 
 
+def _b64_bytes(data: bytes) -> str:
+    return base64.b64encode(data).decode("ascii")
+
+
+def _pack_mcp_src() -> bytes:
+    """把整个 mcp-server 模块打包成 tar.gz bytes(供 base64 嵌入)。"""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for f in _MCP_SRC_PATH.iterdir():
+            if f.is_file():
+                tar.add(str(f), arcname=f"agent_handoff_mcp/{f.name}")
+    return buf.getvalue()
+
+
 @router.get("/install", include_in_schema=False)
 def install_script(
     request: Request,
@@ -44,7 +61,6 @@ def install_script(
 ) -> Response:
     server_url = _infer_server_url(request, server)
 
-    # 读取 skill 资产(若不存在,装一个最小可用版本,避免 500)
     if _SKILL_MD_PATH.exists():
         skill_md = _SKILL_MD_PATH.read_text(encoding="utf-8")
     else:
@@ -53,13 +69,17 @@ def install_script(
     if _HANDOFF_PY_PATH.exists():
         handoff_py = _HANDOFF_PY_PATH.read_text(encoding="utf-8")
     else:
-        # 兜底,跟 mcp-server 同源
         handoff_py = "# handoff.py not found in image\n"
+
+    mcp_tar_b64 = ""
+    if _MCP_SRC_PATH.exists() and _MCP_SRC_PATH.is_dir():
+        mcp_tar_b64 = _b64_bytes(_pack_mcp_src())
 
     script = _render_install_script(
         server_url=server_url,
         skill_md=skill_md,
         handoff_py=handoff_py,
+        mcp_tar_b64=mcp_tar_b64,
     )
 
     return Response(
@@ -72,10 +92,23 @@ def install_script(
     )
 
 
-def _render_install_script(server_url: str, skill_md: str, handoff_py: str) -> str:
-    """拼出最终 bash 脚本。skill_md / handoff_py 用 base64 嵌入,避开 shell 注入。"""
+def _render_install_script(
+    server_url: str, skill_md: str, handoff_py: str, mcp_tar_b64: str
+) -> str:
+    """拼出最终 bash 脚本。所有二进制/多行内容都用 base64 嵌入。"""
     skill_b64 = _b64(skill_md)
     handoff_b64 = _b64(handoff_py)
+
+    # mcp tarball 段(可能为空)
+    mcp_block = ""
+    if mcp_tar_b64:
+        mcp_block = f"""
+# === 2.5. 写 mcp-server 模块(打包的 tar.gz) ===
+printf '%s' '{mcp_tar_b64}' | base64 -d > "$INSTALL_DIR/mcp_src.tar.gz"
+mkdir -p "$INSTALL_DIR/lib"
+tar -xzf "$INSTALL_DIR/mcp_src.tar.gz" -C "$INSTALL_DIR/lib/"
+rm -f "$INSTALL_DIR/mcp_src.tar.gz"
+"""
 
     return f"""#!/usr/bin/env bash
 # ============================================================
@@ -86,7 +119,6 @@ def _render_install_script(server_url: str, skill_md: str, handoff_py: str) -> s
 set -euo pipefail
 
 # === 0. 取 server URL ===
-# 优先级:命令行第一个参数 > env HANDOFF_SERVER_URL > 内置默认
 if [ -n "${{1:-}}" ]; then
   SERVER_URL="$1"
 elif [ -n "${{HANDOFF_SERVER_URL:-}}" ]; then
@@ -106,14 +138,14 @@ printf '%s' '{skill_b64}' | base64 -d > "$INSTALL_DIR/SKILL.md"
 # === 2. 写 handoff.py ===
 printf '%s' '{handoff_b64}' | base64 -d > "$INSTALL_DIR/handoff.py"
 chmod +x "$INSTALL_DIR/handoff.py"
-
+{mcp_block}
 # === 3. 写 config(供后续调用) ===
 cat > "$INSTALL_DIR/config" <<EOF
 server_url=$SERVER_URL
 installed_at=$(date -Iseconds)
 EOF
 
-# === 4. 写个 thin wrapper(让 PATH 一加就能跑) ===
+# === 4. 写 thin wrapper(让 PATH 一加就能跑 `handoff`) ===
 cat > "$INSTALL_DIR/handoff" <<'WRAP'
 #!/usr/bin/env bash
 DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
@@ -135,6 +167,7 @@ echo ""
 echo "============================================================"
 echo "✓ agent-handoff skill installed at $INSTALL_DIR"
 echo "  server: $SERVER_URL"
+echo "  lib   : $INSTALL_DIR/lib/agent_handoff_mcp/ (mcp-server module)"
 echo ""
 echo "用法:"
 echo "  export PATH=\"\\$PATH:$INSTALL_DIR\""

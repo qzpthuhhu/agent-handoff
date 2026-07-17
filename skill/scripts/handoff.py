@@ -7,6 +7,10 @@
   server   启动本地 handoff server(开发用)
 
 这个 CLI 复用了 mcp-server 的 packager/fetcher,只做了 CLI 入口。
+
+运行时会按以下顺序找 agent_handoff_mcp 模块:
+  1. ~/.handoff/lib/                 (装好的 skill,自带模块)
+  2. <repo>/mcp-server/src/           (从仓库直接跑)
 """
 from __future__ import annotations
 
@@ -17,11 +21,17 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# 把同仓的 mcp-server 当库用,避免代码重复
+# 找 agent_handoff_mcp 模块
 _HERE = Path(__file__).resolve().parent
-_MCP_SRC = _HERE.parent.parent.parent / "mcp-server" / "src"
-if str(_MCP_SRC) not in sys.path:
-    sys.path.insert(0, str(_MCP_SRC))
+_candidates = [
+    _HERE.parent / "lib",                                # 装好的 skill
+    _HERE.parent.parent.parent / "mcp-server" / "src",  # 仓库根
+]
+for _c in _candidates:
+    if _c.is_dir() and (_c / "agent_handoff_mcp" / "__init__.py").exists():
+        if str(_c) not in sys.path:
+            sys.path.insert(0, str(_c))
+        break
 
 from agent_handoff_mcp import fetcher, packager  # noqa: E402
 

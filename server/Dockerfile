@@ -25,6 +25,9 @@ COPY server/app ./app
 # 拷 skill 资产(供 /install 路由 base64 嵌入到安装脚本里)
 COPY skill /install
 
+# 拷 mcp-server 模块源码(供 /install 路由打包成 tarball 给客户端)
+COPY mcp-server/src/agent_handoff_mcp /install/mcp_src
+
 # 运行时数据目录
 RUN mkdir -p /var/lib/agent-handoff
 
