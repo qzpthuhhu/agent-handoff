@@ -22,10 +22,13 @@ from pathlib import Path
 from typing import Optional
 
 # 找 agent_handoff_mcp 模块
+# _HERE = <handoff.py 所在目录>
+#   装好后: ~/.handoff/  → 查 ~/.handoff/lib
+#   仓库内: <repo>/skill/scripts/  → 查 <repo>/mcp-server/src
 _HERE = Path(__file__).resolve().parent
 _candidates = [
-    _HERE.parent / "lib",                                # 装好的 skill
-    _HERE.parent.parent.parent / "mcp-server" / "src",  # 仓库根
+    _HERE / "lib",                                          # 装好的 skill
+    _HERE.parent.parent / "mcp-server" / "src",             # 仓库根(<repo>/mcp-server/src)
 ]
 for _c in _candidates:
     if _c.is_dir() and (_c / "agent_handoff_mcp" / "__init__.py").exists():
