@@ -26,6 +26,25 @@ if str(_MCP_SRC) not in sys.path:
 from agent_handoff_mcp import fetcher, packager  # noqa: E402
 
 
+def _resolve_server_url(arg: Optional[str]) -> Optional[str]:
+    """server URL 解析优先级:CLI 参数 > env > ~/.handoff/config > ./handoff/config(开发)。"""
+    if arg:
+        return arg.rstrip("/")
+    env = os.environ.get("HANDOFF_SERVER_URL")
+    if env:
+        return env.rstrip("/")
+    # 装好的 skill 配置
+    for cfg in (Path.home() / ".handoff" / "config", Path("handoff/config")):
+        if cfg.exists():
+            try:
+                for line in cfg.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("server_url="):
+                        return line.split("=", 1)[1].strip().rstrip("/")
+            except OSError:
+                pass
+    return None
+
+
 def cmd_package(args: argparse.Namespace) -> int:
     messages: list[dict]
     if args.messages_json:
@@ -44,9 +63,12 @@ def cmd_package(args: argparse.Namespace) -> int:
     if args.metadata:
         metadata = json.loads(args.metadata)
 
-    server_url = args.server_url or os.environ.get("HANDOFF_SERVER_URL")
+    server_url = _resolve_server_url(args.server_url)
     if not server_url:
-        print("❌ 必须通过 --server-url 或 HANDOFF_SERVER_URL 提供 server URL", file=sys.stderr)
+        print(
+            "❌ 必须通过 --server-url / HANDOFF_SERVER_URL / ~/.handoff/config 之一提供 server URL",
+            file=sys.stderr,
+        )
         return 2
 
     try:
@@ -78,9 +100,12 @@ def cmd_package(args: argparse.Namespace) -> int:
 
 
 def cmd_fetch(args: argparse.Namespace) -> int:
-    server_url = args.server_url or os.environ.get("HANDOFF_SERVER_URL")
+    server_url = _resolve_server_url(args.server_url)
     if not server_url:
-        print("❌ 必须通过 --server-url 或 HANDOFF_SERVER_URL 提供 server URL", file=sys.stderr)
+        print(
+            "❌ 必须通过 --server-url / HANDOFF_SERVER_URL / ~/.handoff/config 之一提供 server URL",
+            file=sys.stderr,
+        )
         return 2
     try:
         summary = fetcher.fetch_and_decrypt(

@@ -1,6 +1,8 @@
 services:
   agent-handoff:
-    build: .
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
     image: agent-handoff:1.0.0
     container_name: agent-handoff
     restart: unless-stopped
