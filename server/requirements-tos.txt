@@ -1,0 +1,3 @@
+# 火山引擎 TOS 存储后端依赖(可选)
+# 部署前先 pip install -r requirements.txt,然后如果用 TOS 存储再装这个
+tos==2.7.0

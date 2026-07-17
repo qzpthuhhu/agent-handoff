@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-handoff-mcp"
+version = "1.0.0"
+description = "MCP server for end-to-end encrypted chat handoff between agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "agent-handoff" }]
+keywords = ["mcp", "agent", "handoff", "encrypted", "ai"]
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "httpx>=0.27",
+    "pydantic>=2.0",
+    "cryptography>=42",
+]
+
+[project.scripts]
+agent-handoff-mcp = "agent_handoff_mcp.server:mcp.run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+agent_handoff_mcp = ["py.typed"]

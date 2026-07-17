@@ -1,0 +1,29 @@
+[Unit]
+Description=Agent Handoff Relay
+After=network.target
+
+[Service]
+Type=simple
+User=handoff
+Group=handoff
+WorkingDirectory=/opt/agent-handoff
+Environment="PATH=/opt/agent-handoff/.venv/bin:/usr/bin"
+EnvironmentFile=/opt/agent-handoff/.env
+ExecStart=/opt/agent-handoff/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers 2
+Restart=on-failure
+RestartSec=5
+# 资源限制
+LimitNOFILE=65535
+# 安全加固
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/agent-handoff
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-handoff
+
+[Install]
+WantedBy=multi-user.target
