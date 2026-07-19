@@ -126,13 +126,145 @@ _INDEX_HTML = f"""<!DOCTYPE html>
     font-size: 12px;
     margin-right: 4px;
   }}
+  /* Hero CTA */
+  .hero {{
+    background: linear-gradient(135deg, #1a1d23 0%, #0f4d2a 100%);
+    border: 1px solid #2a5e3a;
+    border-radius: 16px;
+    padding: 32px;
+    margin-bottom: 24px;
+    text-align: center;
+  }}
+  .hero h2 {{
+    color: #4ade80;
+    font-size: 22px;
+    margin: 0 0 12px;
+  }}
+  .hero p {{
+    color: var(--muted);
+    margin: 0 0 20px;
+  }}
+  .cta {{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #4ade80;
+    color: #0f1115;
+    border: none;
+    padding: 14px 28px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-decoration: none;
+    font-family: inherit;
+  }}
+  .cta:hover {{
+    background: #22c55e;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
+  }}
+  .cta:active {{ transform: translateY(0); }}
+  .cta.copied {{ background: #22c55e; color: white; }}
+  .cta-hint {{
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 12px;
+  }}
+  /* pre block + copy button */
+  pre {{
+    position: relative;
+  }}
+  .copy-btn {{
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #2a2d33;
+    color: var(--muted);
+    border: 1px solid #3a3d43;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+  }}
+  .copy-btn:hover {{
+    background: #3a3d43;
+    color: var(--fg);
+  }}
+  .copy-btn.copied {{
+    background: #22c55e;
+    color: white;
+    border-color: #22c55e;
+  }}
+  .url-bar {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 12px 0;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }}
+  .url-bar .url {{ flex: 1; color: var(--code); overflow: hidden; text-overflow: ellipsis; }}
   footer {{ margin-top: 64px; text-align: center; color: var(--muted); font-size: 13px; }}
 </style>
+<script>
+function copyText(btn) {{
+  const text = btn.dataset.copy || (btn.previousElementSibling && btn.previousElementSibling.innerText) || '';
+  if (!text) return;
+  // 用 navigator.clipboard(优先),fallback 用 textarea + execCommand
+  const after = (ok) => {{
+    const orig = btn.textContent;
+    btn.textContent = ok ? '✓ 已复制' : '复制失败';
+    btn.classList.add('copied');
+    setTimeout(() => {{
+      btn.textContent = orig;
+      btn.classList.remove('copied');
+    }}, 1500);
+  }};
+  if (navigator.clipboard && window.isSecureContext) {{
+    navigator.clipboard.writeText(text).then(() => after(true)).catch(() => fallback());
+  }} else {{
+    fallback();
+  }}
+  function fallback() {{
+    try {{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      after(ok);
+    }} catch (e) {{ after(false); }}
+  }}
+}}
+</script>
 </head>
 <body>
 <div class="wrap">
   <h1>🔐 {SERVER_NAME}</h1>
   <div class="tag">{SERVER_TAGLINE}</div>
+
+  <div class="hero">
+    <h2>🚀 一键发给 Agent</h2>
+    <p>把下面这段粘到目标 agent 的对话里,agent 会自己装 skill + 拉取 handoff</p>
+    <button class="cta" data-copy='请帮我装一个 agent-handoff skill,然后我会给你一个 handoff key 让你拉取对话上下文。具体步骤:
+1. 跑 `bash -c "$(curl -fsSL {SERVER_URL}/install)"` 一键安装
+2. 装好后我会给你一个 handoff key(类似 ah-xxx.yyy),你用 `handoff fetch --handoff-key <KEY>` 拉取
+3. 拉取后读 messages.jsonl 和 files/ 下的文件,接着干我让你做的事' onclick="copyText(this)">
+      📋 复制发给 Agent 的指令
+    </button>
+    <div class="cta-hint">点击复制,粘到 Claude Desktop / Cursor / Cline 等任何 agent 的对话框</div>
+  </div>
 
   <div class="card">
     <h2>三步搞定</h2>
@@ -162,9 +294,11 @@ _INDEX_HTML = f"""<!DOCTYPE html>
   <div class="card">
     <h2>快速接入</h2>
     <p>在其他 agent 的对话里贴这段(LLM 会自动跑):</p>
-    <pre><code>请运行 <span class="green">bash -c "$(curl -fsSL {SERVER_URL}/install)"</span> 然后 fetch handoff: ah-xxx.yyy</code></pre>
+    <pre><button class="copy-btn" data-copy='请运行 bash -c "$(curl -fsSL {SERVER_URL}/install)" 然后 fetch handoff: ah-xxx.yyy' onclick="copyText(this)">复制</button><code>请运行 <span class="green">bash -c "$(curl -fsSL {SERVER_URL}/install)"</span> 然后 fetch handoff: ah-xxx.yyy</code></pre>
     <p>或者手动装:</p>
-    <pre><code>curl -fsSL {SERVER_URL}/install | bash
+    <pre><button class="copy-btn" data-copy='curl -fsSL {SERVER_URL}/install | bash
+handoff package --messages-json ./msgs.json --hint '"'"'topic'"'"'
+handoff fetch --handoff-key ah-xxx.yyy' onclick="copyText(this)">复制</button><code>curl -fsSL {SERVER_URL}/install | bash
 handoff package --messages-json ./msgs.json --hint 'topic'
 handoff fetch --handoff-key ah-xxx.yyy</code></pre>
   </div>

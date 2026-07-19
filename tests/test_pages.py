@@ -45,6 +45,43 @@ def test_home_returns_html(client) -> None:
     assert "/guide.md" in body
 
 
+def test_home_has_hero_cta(client) -> None:
+    """主页应包含显眼的 '复制给 agent' hero 按钮。"""
+    c, _ = client
+    r = c.get("/")
+    body = r.text
+    assert "复制发给 Agent 的指令" in body or "复制发给 agent 的指令" in body.lower()
+    assert 'class="cta"' in body
+    assert "data-copy=" in body
+    # CTA 里应包含一键安装命令
+    assert "install" in body.lower()
+    assert "fetch" in body.lower()
+    assert "messages.jsonl" in body or "files/" in body
+
+
+def test_home_has_copy_buttons(client) -> None:
+    """每个 pre code 旁边应有复制按钮 + JS 函数。"""
+    c, _ = client
+    r = c.get("/")
+    body = r.text
+    # 复制按钮
+    assert body.count('class="copy-btn"') >= 1
+    # JS 函数
+    assert "function copyText" in body
+    assert "navigator.clipboard" in body
+    # pre 块
+    assert "<pre>" in body
+
+
+def test_home_includes_clipboard_fallback(client) -> None:
+    """即使是非安全上下文(navigator.clipboard 不可用)也应该能复制。"""
+    c, _ = client
+    r = c.get("/")
+    body = r.text
+    assert "execCommand" in body  # 旧浏览器 fallback
+    assert "document.createElement" in body
+
+
 def test_agents_txt(client) -> None:
     c, _ = client
     r = c.get("/agents.txt")
