@@ -46,17 +46,34 @@ def test_home_returns_html(client) -> None:
 
 
 def test_home_has_hero_cta(client) -> None:
-    """主页应包含显眼的 '复制给 agent' hero 按钮。"""
+    """主页应包含显眼的 '复制给 agent' hero 按钮 + SHA256 + 一键版。"""
     c, _ = client
     r = c.get("/")
     body = r.text
-    assert "复制发给 Agent 的指令" in body or "复制发给 agent 的指令" in body.lower()
-    assert 'class="cta"' in body
+    # 审计版 + 一键版 hero CTA
+    assert "复制审计版指令" in body
+    assert "class=\"cta\"" in body
+    assert "class=\"cta-secondary\"" in body
     assert "data-copy=" in body
-    # CTA 里应包含一键安装命令
+    # 内容应该包括审计步骤
     assert "install" in body.lower()
     assert "fetch" in body.lower()
     assert "messages.jsonl" in body or "files/" in body
+    # SHA256 占位符
+    assert "__INSTALL_SHA256__" in body or "install-sha" in body
+
+
+def test_install_endpoint_returns_sha256_header(client) -> None:
+    """/install 应该返回 X-Handoff-SHA256 header,让客户端验证完整性。"""
+    c, _ = client
+    r = c.get("/install")
+    assert r.status_code == 200
+    sha = r.headers.get("X-Handoff-SHA256")
+    assert sha is not None
+    assert len(sha) == 64  # SHA-256 hex length
+    import hashlib
+    expected = hashlib.sha256(r.text.encode("utf-8")).hexdigest()
+    assert sha == expected
 
 
 def test_home_has_copy_buttons(client) -> None:

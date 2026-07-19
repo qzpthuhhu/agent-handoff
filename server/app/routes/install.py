@@ -88,8 +88,15 @@ def install_script(
         headers={
             "Content-Disposition": 'inline; filename="install.sh"',
             "Cache-Control": "no-store",
+            # 让用户/agent 能 verify 脚本完整性
+            "X-Handoff-SHA256": _sha256(script),
         },
     )
+
+
+def _sha256(text: str) -> str:
+    import hashlib
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _render_install_script(

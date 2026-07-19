@@ -172,6 +172,40 @@ _INDEX_HTML = f"""<!DOCTYPE html>
     font-size: 13px;
     margin-top: 12px;
   }}
+  .cta-secondary {{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+  }}
+  .cta-secondary:hover {{
+    background: var(--code-bg);
+    color: var(--fg);
+    border-color: #3a3d43;
+  }}
+  .sha-label {{
+    color: var(--muted);
+    font-size: 12px;
+    margin-right: 4px;
+  }}
+  .sha-hash {{
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #fbbf24;
+    word-break: break-all;
+  }}
   /* pre block + copy button */
   pre {{
     position: relative;
@@ -247,6 +281,31 @@ function copyText(btn) {{
     }} catch (e) {{ after(false); }}
   }}
 }}
+
+// 加载 install 脚本 SHA256,动态填到页面 + CTA 复制内容
+(async function() {{
+  try {{
+    const r = await fetch('/install', {{ cache: 'no-store' }});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const sha = r.headers.get('X-Handoff-SHA256') || '';
+    if (!sha) throw new Error('no X-Handoff-SHA256');
+    // 填到 #install-sha 元素
+    const el = document.getElementById('install-sha');
+    if (el) el.textContent = sha;
+    // 填到所有 data-need-sha 的元素的 data-copy 里
+    document.querySelectorAll('[data-need-sha]').forEach(node => {{
+      if (node.dataset.copy) {{
+        node.dataset.copy = node.dataset.copy.replace('__INSTALL_SHA256__', sha);
+      }}
+    }});
+    // 也给 sha 旁的"复制 hash"按钮设 data-copy
+    const shaBtn = document.getElementById('copy-sha-btn');
+    if (shaBtn) shaBtn.dataset.copy = sha;
+  }} catch (e) {{
+    const el = document.getElementById('install-sha');
+    if (el) el.textContent = '加载失败:' + e.message;
+  }}
+}})();
 </script>
 </head>
 <body>
@@ -256,14 +315,41 @@ function copyText(btn) {{
 
   <div class="hero">
     <h2>🚀 一键发给 Agent</h2>
-    <p>把下面这段粘到目标 agent 的对话里,agent 会自己装 skill + 拉取 handoff</p>
-    <button class="cta" data-copy='请帮我装一个 agent-handoff skill,然后我会给你一个 handoff key 让你拉取对话上下文。具体步骤:
-1. 跑 `bash -c "$(curl -fsSL {SERVER_URL}/install)"` 一键安装
-2. 装好后我会给你一个 handoff key(类似 ah-xxx.yyy),你用 `handoff fetch --handoff-key <KEY>` 拉取
-3. 拉取后读 messages.jsonl 和 files/ 下的文件,接着干我让你做的事' onclick="copyText(this)">
-      📋 复制发给 Agent 的指令
+    <p>把这个贴到目标 agent 的对话里。agent 会先下载脚本审计,再跑,不会触发 pipe-to-bash 警告</p>
+    <button class="cta" data-need-sha data-copy='请帮我装一个 agent-handoff skill。具体步骤(不要直接 pipe-to-bash,要先审计):
+
+1. 下载到本地: curl -fsSL https://aishangai.shop/install -o /tmp/handoff-install.sh
+
+2. 读取并审计: cat /tmp/handoff-install.sh
+   期望看到: 创建 ~/.handoff/ 目录、写 SKILL.md + handoff.py、解 base64 嵌入的 mcp-server 模块、pip install httpx cryptography、最后做 health check。这些都是公开透明的操作(完整代码在 https://github.com/qzpthuhhu/agent-handoff)。
+
+3. 验证完整性(可选): sha256sum /tmp/handoff-install.sh 应该等于 __INSTALL_SHA256__。不匹配就别跑。
+
+4. 跑安装: bash /tmp/handoff-install.sh
+
+5. 装好后我会给你一个 handoff key(类似 ah-xxx.yyy),你跑 handoff fetch --handoff-key <KEY> --output-dir /tmp/handoff 拉取。
+
+6. 拉取后读 /tmp/handoff/messages.jsonl 和 /tmp/handoff/files/ 下的文件,接着干我让你做的事。
+
+source: https://aishangai.shop (公开 handoff relay, 端到端加密, 服务端只看到密文)' onclick="copyText(this)">
+      📋 复制审计版指令(给挑剔的 agent)
     </button>
-    <div class="cta-hint">点击复制,粘到 Claude Desktop / Cursor / Cline 等任何 agent 的对话框</div>
+    <div class="cta-hint">
+      适合 Claude Code / Claude.ai 等有安全审计的 agent — 它会先 <code>cat</code> 脚本再决定要不要跑。
+    </div>
+    <div style="margin-top: 14px;">
+      <span class="sha-label">当前 install 脚本 SHA256:</span>
+      <code id="install-sha" class="sha-hash">加载中...</code>
+      <button id="copy-sha-btn" class="copy-btn" style="position: static; margin-left: 8px;" data-copy="" onclick="copyText(this)">复制</button>
+    </div>
+    <div style="margin-top: 16px;">
+      <button class="cta-secondary" data-copy='bash -c "$(curl -fsSL https://aishangai.shop/install)"' onclick="copyText(this)">
+        ⚡ 一键安装(pipe-to-bash,不审计)
+      </button>
+    </div>
+    <div class="cta-hint">
+      ⚠️ 不推荐 — pipe-to-bash 是经典攻击模式,大多数有审计的 agent 会拒。仅适合你自己完全信任的环境。
+    </div>
   </div>
 
   <div class="card">
