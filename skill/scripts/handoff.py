@@ -186,11 +186,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         prog="handoff",
         description="agent-handoff CLI: 跨 agent 加密传输聊天记录和文件",
     )
+    # 全局参数(所有子命令都能用,放在子命令前)
+    p.add_argument(
+        "--server-url",
+        help="handoff server URL(可省略,从 env HANDOFF_SERVER_URL / ~/.handoff/config 读)",
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # package
     pp = sub.add_parser("package", help="打包 + 加密 + 上传")
-    pp.add_argument("--server-url", help="handoff server URL(或 env HANDOFF_SERVER_URL)")
     pp.add_argument("--messages-json", help="messages JSON 文件路径")
     pp.add_argument("--messages", help="messages JSON 字符串")
     pp.add_argument("--files", help="逗号分隔的文件路径列表")
@@ -202,7 +206,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     # fetch
     pf = sub.add_parser("fetch", help="拉取 + 解密 + 落盘")
     pf.add_argument("--handoff-key", required=True, help="ah-{id}.{key}")
-    pf.add_argument("--server-url", help="handoff server URL")
     pf.add_argument("--output-dir", help="落地目录")
     pf.set_defaults(func=cmd_fetch)
 

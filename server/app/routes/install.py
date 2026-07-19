@@ -170,11 +170,11 @@ if command -v python3 >/dev/null 2>&1; then
 fi
 
 # === 4. 写 thin wrapper(让 PATH 一加就能跑 `handoff`) ===
+# 不传 --server-url,handoff.py 会自己从 ~/.handoff/config 读
 cat > "$INSTALL_DIR/handoff" <<'WRAP'
 #!/usr/bin/env bash
 DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
-SERVER_URL=$(grep '^server_url=' "$DIR/config" | cut -d= -f2-)
-exec python3 "$DIR/handoff.py" --server-url "$SERVER_URL" "$@"
+exec python3 "$DIR/handoff.py" "$@"
 WRAP
 chmod +x "$INSTALL_DIR/handoff"
 
