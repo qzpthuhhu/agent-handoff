@@ -46,21 +46,22 @@ def test_home_returns_html(client) -> None:
 
 
 def test_home_has_hero_cta(client) -> None:
-    """主页应包含显眼的 '复制给 agent' hero 按钮 + SHA256 + 一键版。"""
+    """主页应包含显眼的 '复制给 agent' hero 按钮(无 install 模式)。"""
     c, _ = client
     r = c.get("/")
     body = r.text
-    # 审计版 + 一键版 hero CTA
-    assert "复制审计版指令" in body
-    assert "class=\"cta\"" in body
-    assert "class=\"cta-secondary\"" in body
+    # 主 CTA(无 install)+ legacy CTA
+    assert "复制纯 curl 接入指令" in body
+    assert 'class="cta"' in body
+    assert 'class="cta-secondary"' in body
     assert "data-copy=" in body
-    # 内容应该包括审计步骤
-    assert "install" in body.lower()
-    assert "fetch" in body.lower()
-    assert "messages.jsonl" in body or "files/" in body
-    # SHA256 占位符
-    assert "__INSTALL_SHA256__" in body or "install-sha" in body
+    # 强调"无 install"
+    assert "不需要 install" in body or "无需 install" in body
+    # 应该提到 curl 拉 skill.md
+    assert "skill.md" in body
+    assert "curl" in body.lower()
+    # legacy 应被标为不推荐
+    assert "legacy" in body.lower() or "审计" in body
 
 
 def test_install_endpoint_returns_sha256_header(client) -> None:
@@ -119,9 +120,17 @@ def test_skill_md(client) -> None:
     assert "text/plain" in r.headers["content-type"]
     body = r.text
     assert "agent-handoff" in body
-    assert "package" in body
-    assert "fetch" in body
-    assert "inspect" in body
+    # 新版 SKILL.md 是自包含的:含 handoff() / fetch() Python helper
+    assert "def handoff" in body
+    assert "def fetch" in body
+    assert "cryptography" in body
+    assert "AES-256-GCM" in body or "AESGCM" in body
+    assert "AAD" in body or "aad" in body or "bundle_id" in body
+    # 不应该有 base64 嵌入的二进制(避免触发混淆警报)
+    # 检查: SKILL.md 不应包含超长 base64 块
+    import re
+    long_b64 = re.findall(r"[A-Za-z0-9+/=]{200,}", body)
+    assert not long_b64, f"SKILL.md 不应包含长 base64 字符串: {len(long_b64)} 个"
 
 
 def test_guide_md(client) -> None:

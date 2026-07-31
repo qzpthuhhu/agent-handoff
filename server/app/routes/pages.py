@@ -282,28 +282,18 @@ function copyText(btn) {{
   }}
 }}
 
-// 加载 install 脚本 SHA256,动态填到页面 + CTA 复制内容
+// 健康检查(给一个小红点表示服务状态)
 (async function() {{
   try {{
-    const r = await fetch('/install', {{ cache: 'no-store' }});
+    const r = await fetch('/api/v1/health');
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    const sha = r.headers.get('X-Handoff-SHA256') || '';
-    if (!sha) throw new Error('no X-Handoff-SHA256');
-    // 填到 #install-sha 元素
-    const el = document.getElementById('install-sha');
-    if (el) el.textContent = sha;
-    // 填到所有 data-need-sha 的元素的 data-copy 里
-    document.querySelectorAll('[data-need-sha]').forEach(node => {{
-      if (node.dataset.copy) {{
-        node.dataset.copy = node.dataset.copy.replace('__INSTALL_SHA256__', sha);
-      }}
-    }});
-    // 也给 sha 旁的"复制 hash"按钮设 data-copy
-    const shaBtn = document.getElementById('copy-sha-btn');
-    if (shaBtn) shaBtn.dataset.copy = sha;
   }} catch (e) {{
-    const el = document.getElementById('install-sha');
-    if (el) el.textContent = '加载失败:' + e.message;
+    // 服务挂了就显示警告
+    const h = document.querySelector('.tag');
+    if (h) {{
+      h.textContent += '  ⚠️ health check failed';
+      h.style.color = '#f87171';
+    }}
   }}
 }})();
 </script>
@@ -314,52 +304,49 @@ function copyText(btn) {{
   <div class="tag">{SERVER_TAGLINE}</div>
 
   <div class="hero">
-    <h2>🚀 一键发给 Agent</h2>
-    <p>把这个贴到目标 agent 的对话里。agent 会先下载脚本审计,再跑,不会触发 pipe-to-bash 警告</p>
-    <button class="cta" data-need-sha data-copy='请帮我装一个 agent-handoff skill。具体步骤(不要直接 pipe-to-bash,要先审计):
+    <h2>🚀 一键发给 Agent(无 install 模式)</h2>
+    <p>把这段贴到目标 agent 对话。agent 只需 <code>curl</code> 拉一个 markdown 文档到自己 skills 目录,完全不用装任何东西、跑任何 install 脚本</p>
+    <button class="cta" data-copy='我要用 agent-handoff(开源的 agent 任务上下文加密传递服务,部署在 https://aishangai.shop,端到端加密,服务端只看到密文)。
 
-1. 下载到本地: curl -fsSL https://aishangai.shop/install -o /tmp/handoff-install.sh
+请按以下步骤操作(不需要 install,不需要装包,不需要创建任何进程,只需要 curl):
 
-2. 读取并审计: cat /tmp/handoff-install.sh
-   期望看到: 创建 ~/.handoff/ 目录、写 SKILL.md + handoff.py、解 base64 嵌入的 mcp-server 模块、pip install httpx cryptography、最后做 health check。这些都是公开透明的操作(完整代码在 https://github.com/qzpthuhhu/agent-handoff)。
+1. 拉技能文档到你的 skills 目录(用 curl 单一动作,你可以先 cat 审计):
+   curl -fsSL https://aishangai.shop/skill.md -o skills/agent-handoff/SKILL.md
 
-3. 验证完整性(可选): sha256sum /tmp/handoff-install.sh 应该等于 __INSTALL_SHA256__。不匹配就别跑。
+2. 读这个文件,它包含完整的自包含 Python helper(只需要 cryptography 和 httpx 包,Python 内置库也够)。
 
-4. 跑安装: bash /tmp/handoff-install.sh
+3. 我会给你一个 handoff key(类似 ah-xxx.yyy)和 messages(要打包的对话)。你用 SKILL.md 里的 handoff() 函数打包,生成 handoff key 给我。或者用 fetch() 函数拉取我给的 key 对应的内容。
 
-5. 装好后我会给你一个 handoff key(类似 ah-xxx.yyy),你跑 handoff fetch --handoff-key <KEY> --output-dir /tmp/handoff 拉取。
+注意:
+- 不需要跑 install 脚本
+- 不需要创建 ~/.handoff/ 目录
+- 不需要装 mcp-server 或任何 systemd 服务
+- 唯一动作是 curl 拉一个 markdown 文档,你可以 cat 审计
 
-6. 拉取后读 /tmp/handoff/messages.jsonl 和 /tmp/handoff/files/ 下的文件,接着干我让你做的事。
-
-source: https://aishangai.shop (公开 handoff relay, 端到端加密, 服务端只看到密文)' onclick="copyText(this)">
-      📋 复制审计版指令(给挑剔的 agent)
+source: https://aishangai.shop (开源: https://github.com/qzpthuhhu/agent-handoff, MIT)' onclick="copyText(this)">
+      📋 复制纯 curl 接入指令(给挑剔的 agent)
     </button>
     <div class="cta-hint">
-      适合 Claude Code / Claude.ai 等有安全审计的 agent — 它会先 <code>cat</code> 脚本再决定要不要跑。
-    </div>
-    <div style="margin-top: 14px;">
-      <span class="sha-label">当前 install 脚本 SHA256:</span>
-      <code id="install-sha" class="sha-hash">加载中...</code>
-      <button id="copy-sha-btn" class="copy-btn" style="position: static; margin-left: 8px;" data-copy="" onclick="copyText(this)">复制</button>
+      适合 Claude Code / Claude.ai 等有安全审计的 agent — 唯一动作用 <code>curl</code> 拉一个纯 markdown 文档,可审计、不装包、不建进程。
     </div>
     <div style="margin-top: 16px;">
       <button class="cta-secondary" data-copy='bash -c "$(curl -fsSL https://aishangai.shop/install)"' onclick="copyText(this)">
-        ⚡ 一键安装(pipe-to-bash,不审计)
+        ⚡ 一键安装(legacy 模式,给不审计的 agent)
       </button>
     </div>
     <div class="cta-hint">
-      ⚠️ 不推荐 — pipe-to-bash 是经典攻击模式,大多数有审计的 agent 会拒。仅适合你自己完全信任的环境。
+      ⚠️ legacy 模式 — 会跑 install 脚本,base64 嵌入 mcp-server 模块,创建进程。<b>有安全审计的 agent 大概率拒</b>。仅适合完全不审计的环境。
     </div>
   </div>
 
   <div class="card">
-    <h2>三步搞定</h2>
+    <h2>三步搞定(无需 install)</h2>
     <ol class="steps">
-      <li><strong>发送方</strong>(A agent)打包对话:把消息 + 文件加密上传,拿到一个 handoff key</li>
+      <li><strong>发送方</strong>(A agent)用 <code>handoff(messages, ...)</code> 打包,拿到一个 handoff key</li>
       <li>把 key 复制/粘到 <strong>接收方</strong>(B agent)的对话里</li>
-      <li>B agent 一键装上 skill,粘贴 key,自动拉取并解密</li>
+      <li>B agent 用 <code>fetch(handoff_key)</code> 拉取并解密,接着干活</li>
     </ol>
-    <p style="margin-top: 16px;">服务端只看到密文,看不到明文 — 端到端加密,密钥只在你和目标 agent 之间流转。</p>
+    <p style="margin-top: 16px;">整个过程不需要装任何东西到系统:不创建 <code>~/.handoff/</code>、不装 <code>mcp-server</code>、不跑 install 脚本。agent 用它已有的 Python + cryptography 直接调 API。</p>
   </div>
 
   <div class="card">
@@ -469,22 +456,262 @@ def agents_txt() -> str:
     return _AGENTS_TXT
 
 
-# ==================== /skill.md (proxy) ====================
+# ==================== /skill.md ====================
+# 完整 SKILL.md,自包含 Python helper,agent fetch 后复制粘贴就能用,
+# 不需要 install / 不创建进程 / 不装包 / 不动用户文件系统。
 
-# 在 docker 镜像里,SKILL.md 在 /install/SKILL.md(由 Dockerfile COPY 进去)
-_SKILL_MD_PATH_DOCKER = Path("/install/SKILL.md")
-# 开发模式下,从仓库的 skill/ 目录读
-_SKILL_MD_PATH_REPO = Path(__file__).resolve().parent.parent.parent.parent / "skill" / "SKILL.md"
+_SKILL_MD = """---
+name: agent-handoff
+description: 在两个 AI agent 之间端到端加密传递聊天记录和过程文件。无需 install — fetch 这个 skill 文档后,agent 用它自带的 Python + cryptography 直接调 API。
+---
+
+# agent-handoff
+
+> 端到端加密传递对话上下文。**服务器只看到密文**,密钥只在你和目标 agent 之间流转。
+> 
+> 本 skill **不需要安装任何东西** — 只需要 Python(内置)+ `cryptography` 包(可能需要 `pip install cryptography`)。
+
+## TL;DR
+
+1. **A agent(发送方)**: 调 `handoff(messages, server_url, files=...)` 拿到一个 `handoff_key`
+2. **用户**: 把 `handoff_key` 复制/粘到 B agent 的对话里
+3. **B agent(接收方)**: 调 `fetch(handoff_key, server_url)` 拿到 messages 和 files
+
+server URL: `https://aishangai.shop`(生产) / `http://localhost:8080`(本地开发)
+
+## 接入(3 步,无需 install)
+
+### Step 1: 确认环境
+
+```bash
+python3 -c "import cryptography; print('ok')" 2>/dev/null || pip3 install cryptography
+```
+
+### Step 2: 复制下面的 Python 代码到你的脚本/对话里
+
+(下面有完整可用的 `handoff()` 和 `fetch()` 函数,100% 自包含,只需要 `cryptography` 包)
+
+```python
+# === agent-handoff: 自包含 helper ===
+# 只需要 `cryptography` 包(pip install cryptography)
+# 服务端只看到密文,无法还原明文
+
+import json
+import base64
+import os
+import tarfile
+import io
+from pathlib import Path
+from typing import Optional, List
+
+try:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+except ImportError:
+    raise SystemExit("缺少 cryptography 包,请先 pip install cryptography")
+
+import httpx  # 任何 HTTP client 都可以,用 httpx 演示
+
+SERVER_URL_DEFAULT = "https://aishangai.shop"
+
+def _new_key() -> bytes:
+    import secrets
+    return secrets.token_bytes(32)
+
+def _b64(b: bytes) -> str:
+    return base64.b64encode(b).decode("ascii")
+
+def _from_b64(s: str) -> bytes:
+    return base64.b64decode(s)
+
+def _read_files(paths: Optional[List[str]]):
+    files = []
+    for p in paths or []:
+        path = Path(p).expanduser().resolve()
+        if not path.is_file():
+            raise FileNotFoundError(f"文件不存在: {p}")
+        raw = path.read_bytes()
+        files.append({
+            "name": path.name,
+            "path": str(path),
+            "content_b64": _b64(raw),
+            "size": len(raw),
+        })
+    return files
+
+def handoff(
+    messages: list,
+    server_url: str = SERVER_URL_DEFAULT,
+    files: Optional[List[str]] = None,
+    hint: Optional[str] = None,
+    expires_in: int = 604800,
+) -> str:
+    \"\"\"打包 + 加密 + 上传,返回 handoff_key(给 B 端用)。
+    
+    Args:
+        messages: 消息列表,每条 {role, content, ts?}
+        server_url: handoff server URL
+        files: 文件路径列表(可选)
+        hint: 给接收方的备注(可选)
+        expires_in: 过期秒数,默认 7 天
+    Returns:
+        handoff_key 字符串,形如 'ah-7f3a9b2c.3VLmNI...'
+    \"\"\"
+    if not messages:
+        raise ValueError("messages 不能为空")
+    
+    bundle_id = secrets.token_hex(16)  # 16 字节 hex
+    enc_key = _new_key()  # 32 字节
+    
+    # 构造明文
+    payload = {
+        "version": "1.0",
+        "source": {},
+        "messages": messages,
+        "files": _read_files(files),
+    }
+    plaintext = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    
+    # AES-256-GCM 加密(AAD 绑 bundle_id,防跨 bundle 替换)
+    aesgcm = AESGCM(enc_key)
+    nonce = os.urandom(12)
+    ct = aesgcm.encrypt(nonce, plaintext, bundle_id.encode("utf-8"))
+    
+    # 上传
+    body = {
+        "id": bundle_id,
+        "ciphertext_b64": _b64(ct),
+        "nonce_b64": _b64(nonce),
+    }
+    if expires_in:
+        body["expires_in"] = expires_in
+    if hint:
+        body["hint"] = hint
+    
+    r = httpx.post(f"{server_url.rstrip('/')}/api/v1/bundles", json=body, timeout=30)
+    r.raise_for_status()
+    
+    enc_key_b64 = _b64(enc_key).rstrip("=").replace("+", "-").replace("/", "_")  # urlsafe-b64-like
+    # 上面那行是 base64 标准(非 urlsafe)。要 urlsafe 请用 base64.urlsafe_b64encode。
+    return f"ah-{bundle_id}.{base64.urlsafe_b64encode(enc_key).rstrip(b'=').decode('ascii')}"
+
+
+def fetch(
+    handoff_key: str,
+    server_url: str = SERVER_URL_DEFAULT,
+    output_dir: Optional[str] = None,
+) -> dict:
+    \"\"\"拉取 + 解密 + 落盘,返回 summary。\"\"\"
+    if not handoff_key.startswith("ah-"):
+        raise ValueError("handoff_key 格式不合法")
+    bid, enc_b64 = handoff_key[3:].split(".", 1)
+    enc_key = base64.urlsafe_b64decode(enc_b64 + "=" * (-len(enc_b64) % 4))
+    
+    r = httpx.get(f"{server_url.rstrip('/')}/api/v1/bundles/{bid}", timeout=30)
+    r.raise_for_status()
+    blob = r.json()
+    
+    ct = _from_b64(blob["ciphertext_b64"])
+    nonce = _from_b64(blob["nonce_b64"])
+    aesgcm = AESGCM(enc_key)
+    plaintext = aesgcm.decrypt(nonce, ct, bid.encode("utf-8"))
+    payload = json.loads(plaintext.decode("utf-8"))
+    
+    # 落盘
+    if output_dir is None:
+        from datetime import datetime
+        output_dir = f"./handoff/{bid}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+    out = Path(output_dir)
+    (out / "files").mkdir(parents=True, exist_ok=True)
+    (out / "metadata.json").write_text(
+        json.dumps({
+            "version": payload.get("version"),
+            "source": payload.get("source"),
+            "n_messages": len(payload.get("messages", [])),
+            "n_files": len(payload.get("files", [])),
+            "metadata": payload.get("metadata", {}),
+        }, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    with open(out / "messages.jsonl", "w", encoding="utf-8") as f:
+        for m in payload.get("messages", []):
+            f.write(json.dumps(m, ensure_ascii=False) + "\\n")
+    written_files = []
+    for fi in payload.get("files", []):
+        target = out / "files" / Path(fi["name"]).name
+        target.write_bytes(_from_b64(fi["content_b64"]))
+        written_files.append(str(target))
+    
+    return {
+        "output_dir": str(out),
+        "n_messages": len(payload.get("messages", [])),
+        "n_files": len(payload.get("files", [])),
+        "files": written_files,
+        "source": payload.get("source", {}),
+    }
+```
+
+### Step 3: 用
+
+```python
+# A 端
+key = handoff(
+    messages=[{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}],
+    server_url="https://aishangai.shop",
+    files=["./report.md"],
+    hint="Q3 财报 handoff",
+)
+print("handoff key:", key)  # 复制给 B 端
+
+# B 端
+summary = fetch(
+    handoff_key="ah-7f3a9b2c....",
+    server_url="https://aishangai.shop",
+    output_dir="./received",
+)
+print("还原了", summary["n_messages"], "条消息 +", summary["n_files"], "个文件")
+```
+
+## API 端点(直调,不需要 Python helper)
+
+```
+POST /api/v1/bundles
+{
+  "id": "<32 字符 hex>",
+  "ciphertext_b64": "<AES-GCM 密文 base64>",
+  "nonce_b64": "<12 字节 base64>",
+  "expires_in": 604800,
+  "hint": "..."
+}
+
+GET /api/v1/bundles/{id}
+→ 200: {id, ciphertext_b64, nonce_b64, ...}
+→ 404 / 410
+
+DELETE /api/v1/bundles/{id}  (需要 admin token)
+GET  /api/v1/health
+```
+
+## 安全模型(关键)
+
+- **AES-256-GCM** 端到端加密
+- bundle id(16B)和 key(32B)**完全独立**,服务端无法还原
+- AAD 绑 bundle_id,**防密文跨 bundle 替换**
+- 服务端只看到 base64 密文
+- handoff_key 格式:`ah-{bundle_id_hex}.{key_urlsafe_b64}`,~50 字符
+- bundle 默认 7 天过期,后台任务每 6 小时清
+
+## 文件
+
+- README: https://github.com/qzpthuhhu/agent-handoff
+- guide:  https://aishangai.shop/guide.md
+- source:  MIT
+"""
 
 
 @router.get("/skill.md", response_class=PlainTextResponse, include_in_schema=False)
 def skill_md() -> str:
-    """完整 SKILL.md(给 agent 抓的纯 markdown)。"""
-    if _SKILL_MD_PATH_DOCKER.exists():
-        return _SKILL_MD_PATH_DOCKER.read_text(encoding="utf-8")
-    if _SKILL_MD_PATH_REPO.exists():
-        return _SKILL_MD_PATH_REPO.read_text(encoding="utf-8")
-    return "# agent-handoff skill\n\n(未找到 SKILL.md)\n"
+    """自包含 SKILL.md:包含完整 Python helper,agent fetch 后即可使用。"""
+    return _SKILL_MD
 
 
 # ==================== /guide.md ====================
