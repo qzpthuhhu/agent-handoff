@@ -14,7 +14,8 @@
                        用户复制粘贴
 ```
 
-**当前部署**: https://aishangai.shop(走 Cloudflare Tunnel 加密)
+**当前部署**: https://aishangai.shop 
+(走 Cloudflare Tunnel 加密)
 
 ## 核心特性
 
